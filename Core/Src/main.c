@@ -40,6 +40,8 @@
 /* USER CODE END PM */
 
 /* Private variables ---------------------------------------------------------*/
+CAN_HandleTypeDef hcan1;
+
 UART_HandleTypeDef huart3;
 
 PCD_HandleTypeDef hpcd_USB_OTG_FS;
@@ -53,6 +55,7 @@ void SystemClock_Config(void);
 static void MX_GPIO_Init(void);
 static void MX_USART3_UART_Init(void);
 static void MX_USB_OTG_FS_PCD_Init(void);
+static void MX_CAN1_Init(void);
 /* USER CODE BEGIN PFP */
 
 /* USER CODE END PFP */
@@ -93,14 +96,42 @@ int main(void)
   MX_GPIO_Init();
   MX_USART3_UART_Init();
   MX_USB_OTG_FS_PCD_Init();
-  /* USER CODE BEGIN 2 */
-
+  MX_CAN1_Init();
+/* USER CODE BEGIN 2 */
+  // ASSERT ALL RELAYS TO OFF POSITION
+  HAL_GPIO_WritePin(neg_main_GPIO_Port, neg_main_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(pos_main_GPIO_Port, pos_main_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(pos_relay_GPIO_Port, pos_relay_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(DPST_GPIO_Port, DPST_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(motor_relays_GPIO_Port, motor_relays_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(charger_relays_GPIO_Port, charger_relays_Pin, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(ready_flag_GPIO_Port, ready_flag_Pin, GPIO_PIN_RESET);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+    if (HAL_GPIO_ReadPin(emergency_shut_off_GPIO_Port, emergency_shut_off_Pin) == GPIO_PIN_SET)
+    {
+      HAL_GPIO_WritePin(DPST_GPIO_Port, DPST_Pin, GPIO_PIN_RESET);
+      HAL_GPIO_WritePin(neg_main_GPIO_Port, neg_main_Pin, GPIO_PIN_RESET);
+      HAL_GPIO_WritePin(ready_flag_GPIO_Port, ready_flag_Pin, GPIO_PIN_RESET);
+    }
+
+    if (HAL_GPIO_ReadPin(push_to_start_GPIO_Port, push_to_start_Pin) == GPIO_PIN_SET)
+    {
+      HAL_GPIO_WritePin(neg_main_GPIO_Port, neg_main_Pin, GPIO_PIN_SET);
+      HAL_Delay(1000);
+      HAL_GPIO_WritePin(pos_main_GPIO_Port, pos_main_Pin, GPIO_PIN_SET);
+      HAL_Delay(1000);
+      HAL_GPIO_WritePin(DPST_GPIO_Port, DPST_Pin, GPIO_PIN_SET);
+      HAL_Delay(5000);
+      HAL_GPIO_WritePin(motor_relays_GPIO_Port, motor_relays_Pin, GPIO_PIN_SET);
+      HAL_Delay(10000);
+      HAL_GPIO_WritePin(charger_relays_GPIO_Port, charger_relays_Pin, GPIO_PIN_SET);
+      HAL_GPIO_WritePin(ready_flag_GPIO_Port, ready_flag_Pin, GPIO_PIN_SET);
+    }
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
@@ -152,6 +183,43 @@ void SystemClock_Config(void)
   {
     Error_Handler();
   }
+}
+
+/**
+  * @brief CAN1 Initialization Function
+  * @param None
+  * @retval None
+  */
+static void MX_CAN1_Init(void)
+{
+
+  /* USER CODE BEGIN CAN1_Init 0 */
+
+  /* USER CODE END CAN1_Init 0 */
+
+  /* USER CODE BEGIN CAN1_Init 1 */
+
+  /* USER CODE END CAN1_Init 1 */
+  hcan1.Instance = CAN1;
+  hcan1.Init.Prescaler = 16;
+  hcan1.Init.Mode = CAN_MODE_NORMAL;
+  hcan1.Init.SyncJumpWidth = CAN_SJW_1TQ;
+  hcan1.Init.TimeSeg1 = CAN_BS1_1TQ;
+  hcan1.Init.TimeSeg2 = CAN_BS2_1TQ;
+  hcan1.Init.TimeTriggeredMode = DISABLE;
+  hcan1.Init.AutoBusOff = DISABLE;
+  hcan1.Init.AutoWakeUp = DISABLE;
+  hcan1.Init.AutoRetransmission = DISABLE;
+  hcan1.Init.ReceiveFifoLocked = DISABLE;
+  hcan1.Init.TransmitFifoPriority = DISABLE;
+  if (HAL_CAN_Init(&hcan1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+  /* USER CODE BEGIN CAN1_Init 2 */
+
+  /* USER CODE END CAN1_Init 2 */
+
 }
 
 /**
@@ -239,18 +307,19 @@ static void MX_GPIO_Init(void)
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOH_CLK_ENABLE();
   __HAL_RCC_GPIOB_CLK_ENABLE();
-  __HAL_RCC_GPIOD_CLK_ENABLE();
   __HAL_RCC_GPIOG_CLK_ENABLE();
+  __HAL_RCC_GPIOD_CLK_ENABLE();
   __HAL_RCC_GPIOA_CLK_ENABLE();
 
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, LD1_Pin|LD3_Pin|LD2_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOG, USB_PowerSwitchOn_Pin|GPIO_PIN_9|GPIO_PIN_10, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOG, USB_PowerSwitchOn_Pin|charger_relays_Pin|motor_relays_Pin|DPST_Pin
+                          |pos_main_Pin|neg_main_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOD, GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_7, GPIO_PIN_RESET);
+  HAL_GPIO_WritePin(GPIOD, pos_relay_Pin|ready_flag_Pin, GPIO_PIN_RESET);
 
   /*Configure GPIO pin : USER_Btn_Pin */
   GPIO_InitStruct.Pin = USER_Btn_Pin;
@@ -265,27 +334,33 @@ static void MX_GPIO_Init(void)
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : USB_PowerSwitchOn_Pin PG9 PG10 */
-  GPIO_InitStruct.Pin = USB_PowerSwitchOn_Pin|GPIO_PIN_9|GPIO_PIN_10;
+  /*Configure GPIO pins : USB_PowerSwitchOn_Pin charger_relays_Pin motor_relays_Pin DPST_Pin
+                           pos_main_Pin neg_main_Pin */
+  GPIO_InitStruct.Pin = USB_PowerSwitchOn_Pin|charger_relays_Pin|motor_relays_Pin|DPST_Pin
+                          |pos_main_Pin|neg_main_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOG, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : USB_OverCurrent_Pin PG11 PG12 PG13
-                           PG14 */
-  GPIO_InitStruct.Pin = USB_OverCurrent_Pin|GPIO_PIN_11|GPIO_PIN_12|GPIO_PIN_13
-                          |GPIO_PIN_14;
+  /*Configure GPIO pins : USB_OverCurrent_Pin push_to_start_Pin */
+  GPIO_InitStruct.Pin = USB_OverCurrent_Pin|push_to_start_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   HAL_GPIO_Init(GPIOG, &GPIO_InitStruct);
 
-  /*Configure GPIO pins : PD5 PD6 PD7 */
-  GPIO_InitStruct.Pin = GPIO_PIN_5|GPIO_PIN_6|GPIO_PIN_7;
+  /*Configure GPIO pins : pos_relay_Pin ready_flag_Pin */
+  GPIO_InitStruct.Pin = pos_relay_Pin|ready_flag_Pin;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
   HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+
+  /*Configure GPIO pin : emergency_shut_off_Pin */
+  GPIO_InitStruct.Pin = emergency_shut_off_Pin;
+  GPIO_InitStruct.Mode = GPIO_MODE_INPUT;
+  GPIO_InitStruct.Pull = GPIO_NOPULL;
+  HAL_GPIO_Init(emergency_shut_off_GPIO_Port, &GPIO_InitStruct);
 
   /* USER CODE BEGIN MX_GPIO_Init_2 */
 
